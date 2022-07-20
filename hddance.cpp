@@ -54,7 +54,7 @@ void got_signal(int)
     quit.store(true);
 }
 
-class hdmotion
+class hddance
 {
 public:
     std::string name;
@@ -62,7 +62,7 @@ public:
     size_t block;
     size_t capacity;
 
-    hdmotion(const std::string &dev, const std::string &res) : 
+    hddance(const std::string &dev, const std::string &res) : 
         name(""),
         results_dir(res),
         block(0),
@@ -80,14 +80,16 @@ public:
             throw std::runtime_error("can't open block device");
         }
         this->name = get_hdd_name();
+        buf = static_cast<char*>(std::aligned_alloc(BLOCK, MiB));
     }
 
-    ~hdmotion()
+    ~hddance()
     {
         if (fd >= 0)
         {
             close(fd);
         }
+        std::free(buf);
     }
 
     void get_capacity()
@@ -100,12 +102,12 @@ public:
 
     void set_block_size(const size_t &block)
     {
+        if (block > MiB)
+        {
+            throw std::runtime_error("block can't be more than 1 MiB");
+        }
         std::cout << "Setting block size to " << block << " Bytes";
         this->block = block;
-        if (posix_memalign((void **)&buf, this->block, this->block) != 0)
-        {
-            throw std::runtime_error("can't set memalign");
-        }
         get_capacity();
         this->capacity -= this->block;
     }
@@ -130,10 +132,11 @@ public:
         if (printpos){
             std::string line(80, ' ');
             line[(uint8_t)(position * 79)] = '#';
-            std::cout << line << std::endl;
+            std::cout << line;
         }
 
         size_t by = size_t(capacity * position) / this->block * this->block;
+        std::cout << by << std::endl;
         lseek(fd, by, SEEK_SET);
         auto t1 = high_resolution_clock::now();
         auto got = read(fd, buf, this->block);
@@ -367,7 +370,7 @@ public:
 private:
     std::string dev;
     int fd;
-    char *buf;
+    char* buf;
     std::random_device rd;
     std::default_random_engine generator;
 };
@@ -428,20 +431,20 @@ int main(int argc, char **argv)
         sigfillset(&sa.sa_mask);
         sigaction(SIGINT, &sa, nullptr);
 
-        auto D = hdmotion(device, output);
+        auto dance = hddance(device, output);
         if (vm.count("moveheads"))
         {
-            D.move_heads();
+            dance.move_heads();
             return 0;
         }
         if (vm.count("blocksize"))
         {
-            D.perform_random_read_benchmark(block * KiB);
+            dance.perform_random_read_benchmark(block * KiB);
             return 0;
         }
-        D.perform_random_read_benchmark(BLOCK);
-        D.perform_random_read_benchmark(4 * KiB);
-        D.perform_random_read_benchmark(64 * KiB);
+        dance.perform_random_read_benchmark(BLOCK);
+        dance.perform_random_read_benchmark(4 * KiB);
+        dance.perform_random_read_benchmark(64 * KiB);
         return 0;
     }
     catch (const normal_exit &e)
