@@ -106,7 +106,7 @@ public:
         {
             throw std::runtime_error("block can't be more than 1 MiB");
         }
-        std::cout << "Setting block size to " << block << " Bytes";
+        std::cout << "setting block size to " << block << " Bytes";
         this->block = block;
         get_capacity();
         this->capacity -= this->block;
@@ -132,11 +132,10 @@ public:
         if (printpos){
             std::string line(80, ' ');
             line[(uint8_t)(position * 79)] = '#';
-            std::cout << line;
+            std::cout << line << std::endl;
         }
 
         size_t by = size_t(capacity * position) / this->block * this->block;
-        std::cout << by << std::endl;
         lseek(fd, by, SEEK_SET);
         auto t1 = high_resolution_clock::now();
         auto got = read(fd, buf, this->block);
@@ -218,7 +217,7 @@ public:
         for (const auto &x : precomp)
         {
             results.push_back(result_t::value_type(x, read_position(x)));
-            auto line = std::to_string(counter++);
+            auto line = std::to_string(++counter);
             std::cout << line << "\r" << std::flush;
         }
         std::cout << std::endl;
@@ -230,6 +229,9 @@ public:
             results_file << block << std::endl;
             for (auto &x : results)
             {
+                if (x.second <= 0) {
+                    throw std::runtime_error("invalid block access measurement, repeat the test");
+                }
                 results_file << x.first << ":" << x.second << std::endl;
             }
             results_file.close();
@@ -354,15 +356,8 @@ public:
         std::vector<double> ts;
         for (i = 0; i < 200; ++i)
         {
-            using namespace std::chrono;
-
-            auto t1 = high_resolution_clock::now();
-            read_position(0 + pos_distr(generator));
-            auto t2 = high_resolution_clock::now();
-            read_position(1 - pos_distr(generator));
-            auto t3 = high_resolution_clock::now();
-            ts.push_back(duration_cast<duration<double>>(t2 - t1).count());
-            ts.push_back(duration_cast<duration<double>>(t3 - t2).count());
+            ts.push_back(read_position(0 + pos_distr(generator)));
+            ts.push_back(read_position(1 - pos_distr(generator)));
         }
         std::cout << "average full swing is " << std::reduce(ts.begin(), ts.end(), 0.0) / ts.size() * 1000 << " ms" << std::endl;
     }
@@ -449,6 +444,7 @@ int main(int argc, char **argv)
     }
     catch (const normal_exit &e)
     {
+        std::cout << "canceled by user" << std::endl;
         return 0;
     }
     catch (const std::exception &e)
